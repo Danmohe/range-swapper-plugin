@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Range Swapper</title>
+  <!-- OnlyOffice Plugin SDK — must load before plugin code -->
+  <script type="text/javascript" src="plugins.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", Arial, sans-serif; font-size: 13px;
+      background: #f7f7f7; color: #2c2c2c; height: 100vh;
+      display: flex; flex-direction: column;
+    }
+    .header { background: #2b579a; color: #fff; padding: 10px 14px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .header h1 { font-size: 14px; font-weight: 600; }
+    .body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+    .slot-card { background: #fff; border: 1px solid #dde1e7; border-radius: 6px; overflow: hidden; transition: border-color 0.2s; }
+    .slot-card.capturing { border-color: #2b579a; box-shadow: 0 0 0 2px rgba(43,87,154,0.15); }
+    .slot-header { background: #f0f3f8; padding: 6px 12px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #555; border-bottom: 1px solid #dde1e7; }
+    .slot-card.capturing .slot-header { background: #e8eef8; color: #2b579a; }
+    .slot-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .slot-display { background: #f7f9fc; border: 1px solid #dde1e7; border-radius: 4px; padding: 7px 10px; min-height: 34px; display: flex; align-items: center; gap: 6px; }
+    .addr { font-family: monospace; font-size: 13px; font-weight: 600; color: #1a1a2e; }
+    .addr.empty { color: #aaa; font-weight: 400; font-style: italic; }
+    .count { margin-left: auto; font-size: 11px; color: #888; }
+    .slot-actions { display: flex; gap: 6px; }
+    .hint { font-size: 11px; color: #2b579a; background: #e8eef8; border-radius: 4px; padding: 5px 8px; display: none; }
+    .slot-card.capturing .hint { display: block; }
+
+    .btn { flex: 1; padding: 7px 10px; border: none; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    .btn-set { background: #2b579a; color: #fff; }
+    .btn-set:hover:not(:disabled) { background: #1e3f72; }
+    .btn-set.capturing { background: #1e7e34; }
+    .btn-set.capturing:hover:not(:disabled) { background: #145a26; }
+    .btn-clear { flex: 0 0 auto; background: #f0f0f0; color: #555; padding: 7px 10px; }
+    .btn-clear:hover:not(:disabled) { background: #e0e0e0; }
+
+    .swap-arrow { text-align: center; color: #aaa; font-size: 18px; }
+    .status-box { border-radius: 5px; padding: 8px 11px; font-size: 12px; line-height: 1.4; display: none; }
+    .status-box.error   { background: #fdecea; color: #b71c1c; border: 1px solid #f5c6cb; display: block; }
+    .status-box.success { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; display: block; }
+
+    .overlap-prompt { background: #fff8e1; border: 1px solid #ffe082; border-radius: 5px; padding: 10px 12px; display: none; flex-direction: column; gap: 8px; }
+    .overlap-prompt.visible { display: flex; }
+    .overlap-prompt p { font-size: 12px; color: #7a5800; }
+    .overlap-actions { display: flex; gap: 6px; }
+    .btn-continue { flex:1; padding:7px; background:#f9a825; color:#fff; border:none; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; }
+    .btn-cancel   { flex:1; padding:7px; background:#f0f0f0; color:#555; border:none; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; }
+
+    .swap-section { margin-top: auto; }
+    .btn-swap { width:100%; padding:10px; background:#2b579a; color:#fff; border:none; border-radius:5px; font-size:13px; font-weight:700; cursor:pointer; letter-spacing:0.3px; }
+    .btn-swap:hover:not(:disabled) { background: #1e3f72; }
+    .btn-swap:disabled { opacity:0.35; cursor:default; }
+  </style>
+</head>
+<body>
+  <div class="header"><span>↕</span><h1>Range Swapper</h1></div>
+  <div class="body">
+
+    <div class="slot-card" id="slotA">
+      <div class="slot-header">Range A</div>
+      <div class="slot-body">
+        <div class="slot-display">
+          <span class="addr empty" id="addrA">Not set</span>
+          <span class="count" id="countA"></span>
+        </div>
+        <div class="hint">Select cells in the sheet, then click Confirm ✓</div>
+        <div class="slot-actions">
+          <button class="btn btn-set" id="btnSetA" onclick="handleSetBtn('A')">Set Range A</button>
+          <button class="btn btn-clear" id="btnClearA" onclick="clearSlot('A')" disabled>✕</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="swap-arrow">⇅</div>
+
+    <div class="slot-card" id="slotB">
+      <div class="slot-header">Range B</div>
+      <div class="slot-body">
+        <div class="slot-display">
+          <span class="addr empty" id="addrB">Not set</span>
+          <span class="count" id="countB"></span>
+        </div>
+        <div class="hint">Select cells in the sheet, then click Confirm ✓</div>
+        <div class="slot-actions">
+          <button class="btn btn-set" id="btnSetB" onclick="handleSetBtn('B')">Set Range B</button>
+          <button class="btn btn-clear" id="btnClearB" onclick="clearSlot('B')" disabled>✕</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-box" id="statusBox"></div>
+
+    <div class="overlap-prompt" id="overlapPrompt">
+      <p>⚠️ The ranges overlap. Swapping may produce unexpected results.</p>
+      <div class="overlap-actions">
+        <button class="btn-continue" onclick="executeSwap()">Continue</button>
+        <button class="btn-cancel"   onclick="dismissOverlap()">Cancel</button>
+      </div>
+    </div>
+
+    <div class="swap-section">
+      <button class="btn-swap" id="btnSwap" onclick="handleSwap()" disabled>Swap ↕</button>
+    </div>
+
+  </div>
+
+  <script>
+    // ── State ──────────────────────────────────────────────────────────
+    var state = {
+      A: { addr: null, rows: 0, cols: 0, capturing: false },
+      B: { addr: null, rows: 0, cols: 0, capturing: false }
+    };
+
+    // ── Plugin lifecycle ───────────────────────────────────────────────
+    (function (window) {
+      window.Asc.plugin.init   = function () {};
+      window.Asc.plugin.button = function () {};
+    })(window);
+
+    // ── Helpers ────────────────────────────────────────────────────────
+    function parseAddress(addr) {
+      var clean = addr.replace(/^[^!]+!/, "").replace(/\$/g, "");
+      var parts = clean.split(":");
+      var from  = cellToRC(parts[0]);
+      var to    = parts[1] ? cellToRC(parts[1]) : { row: from.row, col: from.col };
+      return {
+        rowStart: Math.min(from.row, to.row), rowEnd: Math.max(from.row, to.row),
+        colStart: Math.min(from.col, to.col), colEnd: Math.max(from.col, to.col),
+        rows: Math.abs(to.row - from.row) + 1,
+        cols: Math.abs(to.col - from.col) + 1
+      };
+    }
+    function cellToRC(cell) {
+      var m = cell.match(/([A-Z]+)(\d+)/i);
+      if (!m) return { row: 0, col: 0 };
+      var col = 0;
+      m[1].toUpperCase().split("").forEach(function (ch) { col = col * 26 + (ch.charCodeAt(0) - 64); });
+      return { row: parseInt(m[2], 10), col: col };
+    }
+    function rangesOverlap(a, b) {
+      var pA = parseAddress(a), pB = parseAddress(b);
+      return !(pA.rowEnd < pB.rowStart || pA.rowStart > pB.rowEnd || pA.colEnd < pB.colStart || pA.colStart > pB.colEnd);
+    }
+    function cellCount(addr) { var p = parseAddress(addr); return p.rows * p.cols; }
+    function showStatus(msg, type) { var b = document.getElementById("statusBox"); b.className = "status-box " + type; b.textContent = msg; }
+    function clearStatus() { var b = document.getElementById("statusBox"); b.className = "status-box"; b.textContent = ""; }
+
+    // ── UI ─────────────────────────────────────────────────────────────
+    function updateUI() {
+      renderSlot("A", state.A); renderSlot("B", state.B);
+      document.getElementById("btnSwap").disabled =
+        !(state.A.addr && state.B.addr && !state.A.capturing && !state.B.capturing);
+    }
+    function renderSlot(slot, s) {
+      var card = document.getElementById("slot" + slot);
+      var btn  = document.getElementById("btnSet"   + slot);
+      var addr = document.getElementById("addr"     + slot);
+      var cnt  = document.getElementById("count"    + slot);
+      var clr  = document.getElementById("btnClear" + slot);
+      if (s.capturing) {
+        card.classList.add("capturing"); btn.classList.add("capturing");
+        btn.textContent = "Confirm ✓"; addr.textContent = "Select cells…";
+        addr.className = "addr empty"; cnt.textContent = ""; clr.disabled = true;
+      } else if (s.addr) {
+        card.classList.remove("capturing"); btn.classList.remove("capturing");
+        btn.textContent = "Change";
+        addr.textContent = s.addr.replace(/^[^!]+!/, "");
+        addr.className = "addr";
+        var n = cellCount(s.addr); cnt.textContent = n + " cell" + (n !== 1 ? "s" : "");
+        clr.disabled = false;
+      } else {
+        card.classList.remove("capturing"); btn.classList.remove("capturing");
+        btn.textContent = "Set Range " + slot; addr.textContent = "Not set";
+        addr.className = "addr empty"; cnt.textContent = ""; clr.disabled = true;
+      }
+    }
+
+    // ── Button handlers ────────────────────────────────────────────────
+    function handleSetBtn(slot) {
+      var s = state[slot];
+      if (s.capturing) {
+        // ── Confirm: use callCommandAsync (returns a Promise with the actual value) ──
+        Asc.plugin.callCommandAsync(function () {
+          try {
+            var ws    = Api.GetActiveSheet();
+            var range = ws.GetSelection();
+            if (!range) return null;
+            return range.GetAddress(false, false, "A1", false);
+          } catch (e) { return "ERR:" + e.message; }
+        }).then(function (result) {
+          if (!result || (typeof result === "string" && result.indexOf("ERR:") === 0)) {
+            showStatus("Could not read selection" + (result ? " — " + result.replace("ERR:", "") : "") + ". Try again.", "error");
+            state[slot].capturing = false;
+            updateUI();
+            return;
+          }
+          state[slot].addr      = result;
+          state[slot].capturing = false;
+          var p = parseAddress(result);
+          state[slot].rows = p.rows;
+          state[slot].cols = p.cols;
+          clearStatus();
+          updateUI();
+        }).catch(function (e) {
+          showStatus("Error reading selection: " + e.message, "error");
+          state[slot].capturing = false;
+          updateUI();
+        });
+
+      } else {
+        var other = slot === "A" ? "B" : "A";
+        if (state[other].capturing) { state[other].capturing = false; }
+        s.capturing = true;
+        clearStatus();
+        document.getElementById("overlapPrompt").classList.remove("visible");
+        updateUI();
+      }
+    }
+
+    function clearSlot(slot) {
+      state[slot] = { addr: null, rows: 0, cols: 0, capturing: false };
+      clearStatus();
+      document.getElementById("overlapPrompt").classList.remove("visible");
+      updateUI();
+    }
+
+    function handleSwap() {
+      var sA = state.A, sB = state.B;
+      if (!sA.addr || !sB.addr) return;
+      clearStatus();
+      document.getElementById("overlapPrompt").classList.remove("visible");
+      var cA = cellCount(sA.addr), cB = cellCount(sB.addr);
+      if (cA !== cB) {
+        showStatus("Ranges must be the same size. A: " + cA + " cell(s), B: " + cB + " cell(s).", "error");
+        return;
+      }
+      if (rangesOverlap(sA.addr, sB.addr)) {
+        document.getElementById("overlapPrompt").classList.add("visible");
+        return;
+      }
+      executeSwap();
+    }
+
+    function dismissOverlap() {
+      document.getElementById("overlapPrompt").classList.remove("visible");
+    }
+
+    function executeSwap() {
+      document.getElementById("overlapPrompt").classList.remove("visible");
+
+      var pA = parseAddress(state.A.addr);
+      var pB = parseAddress(state.B.addr);
+
+      // Pass everything needed into the editor context via Asc.scope
+      Asc.scope.startRowA = pA.rowStart;
+      Asc.scope.startColA = pA.colStart;
+      Asc.scope.startRowB = pB.rowStart;
+      Asc.scope.startColB = pB.colStart;
+      Asc.scope.rows      = pA.rows;
+      Asc.scope.cols      = pA.cols;
+
+      // Phase 1: read — use ws.GetRange(addr) per cell (GetCell doesn't exist on ApiRange)
+      Asc.plugin.callCommandAsync(function () {
+        try {
+          // Column number → letter(s), e.g. 3 → "C", 27 → "AA"
+          function colLetter(n) {
+            var s = "";
+            while (n > 0) { var r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+            return s;
+          }
+          var ws   = Api.GetActiveSheet();
+          var rows = Asc.scope.rows, cols = Asc.scope.cols;
+          var sRA  = Asc.scope.startRowA, sCA = Asc.scope.startColA;
+          var sRB  = Asc.scope.startRowB, sCB = Asc.scope.startColB;
+          var dA = [], dB = [];
+          for (var r = 0; r < rows; r++) {
+            for (var c = 0; c < cols; c++) {
+              var cA = ws.GetRange(colLetter(sCA + c) + (sRA + r));
+              var cB = ws.GetRange(colLetter(sCB + c) + (sRB + r));
+              var fA = cA.GetFormula(); dA.push(fA ? fA : cA.GetValue());
+              var fB = cB.GetFormula(); dB.push(fB ? fB : cB.GetValue());
+            }
+          }
+          return { sRA: sRA, sCA: sCA, sRB: sRB, sCB: sCB, a: dA, b: dB, rows: rows, cols: cols };
+        } catch (e) {
+          return "ERR:" + e.message;
+        }
+      }).then(function (result) {
+        if (!result || typeof result === "string") {
+          showStatus("Read failed" + (typeof result === "string" ? ": " + result.replace("ERR:", "") : "") + ".", "error");
+          return;
+        }
+
+        // Phase 2: write — same address construction approach
+        Asc.scope.sRA   = result.sRA;  Asc.scope.sCA  = result.sCA;
+        Asc.scope.sRB   = result.sRB;  Asc.scope.sCB  = result.sCB;
+        Asc.scope.dataA = result.a;    Asc.scope.dataB = result.b;
+        Asc.scope.rows  = result.rows; Asc.scope.cols  = result.cols;
+
+        Asc.plugin.callCommand(function () {
+          function colLetter(n) {
+            var s = "";
+            while (n > 0) { var r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+            return s;
+          }
+          var ws   = Api.GetActiveSheet();
+          var rows = Asc.scope.rows, cols = Asc.scope.cols;
+          var dA   = Asc.scope.dataA, dB = Asc.scope.dataB;
+          var i = 0;
+          for (var r = 0; r < rows; r++) {
+            for (var c = 0; c < cols; c++) {
+              var cellA = ws.GetRange(colLetter(Asc.scope.sCA + c) + (Asc.scope.sRA + r));
+              var cellB = ws.GetRange(colLetter(Asc.scope.sCB + c) + (Asc.scope.sRB + r));
+              if (typeof dB[i] === "string" && dB[i].charAt(0) === "=") { cellA.SetFormula(dB[i]); } else { cellA.SetValue(dB[i]); }
+              if (typeof dA[i] === "string" && dA[i].charAt(0) === "=") { cellB.SetFormula(dA[i]); } else { cellB.SetValue(dA[i]); }
+              i++;
+            }
+          }
+        }, false);
+
+        showStatus("✓ Ranges swapped successfully.", "success");
+
+      }).catch(function (e) {
+        showStatus("Swap failed: " + e.message, "error");
+      });
+    }
+
+    updateUI();
+  </script>
+</body>
+</html>
