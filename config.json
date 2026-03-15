@@ -6,8 +6,8 @@
   "variations": [
     {
       "description": "Swap two cell ranges in a spreadsheet",
-      "url": "index.html",
-      "icons": ["resources/img/icon.png", "resources/img/icon@2x.png"],
+      "url": "https://danmohe.github.io/range-swapper-plugin/index.html",
+      "icons": ["https://danmohe.github.io/range-swapper-plugin/resources/img/icon.png", "https://danmohe.github.io/range-swapper-plugin/resources/img/icon@2x.png"],
       "isViewer": false,
       "EditorsSupport": ["cell"],
       "isVisual": true,
